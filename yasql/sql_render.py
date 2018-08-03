@@ -1,28 +1,31 @@
-from funcy import omit, merge
-from ruamel.yaml.comments import CommentedMap
+import copy
 
-from .utils import sql_format
+import sqlalchemy as sa
+from sqlalchemy import text
 
-def _build_clause(name, item):
-    key = name.replace(' ', '_')
-    if key not in item:
-        return ''
+from .utils import listify, dict_one
 
-    return '{} {}'.format(name, item[key])
+def _build_where(conds):
+    def _build_one(cond):
+        if isinstance(cond, str):
+            return text(cond)
+        if isinstance(cond, dict):
+            col, val = dict_one(cond)
+            return (sa.literal_column(col) == val)
 
-def _build_where(item):
-    def wrap(v):
-        if isinstance(v, str):
-            return "'{}'".format(v)
-        return v
+    return sa.and_(*[_build_one(c) for c in listify(conds)])
 
-    if 'where' not in item:
-        return ''
 
-    return 'where ' + \
-        ' and '.join(
-            '{} = {}'.format(k, wrap(v))
-            for k, v in item['where'].items())
+def _build_fields(fields):
+    def _build_one(cond):
+        if isinstance(cond, str):
+            return text(cond)
+        if isinstance(cond, dict):
+            col_name, sql = dict_one(cond)
+            return sa.literal_column(sql).label(col_name)
+
+    return [_build_one(f) for f in listify(fields)]
+
 
 class Processor(object):
     when = None
@@ -30,14 +33,14 @@ class Processor(object):
     def process(self, item):
         if self.can_apply(item):
             return self.transform(item)
-        return item
+        return item, False
 
     def transform(self, item):
         raise NotImplemented()
 
     def can_apply(self, item):
         if self.when:
-            return self.when in item
+            return isinstance(item, dict) and self.when in item
         return True
 
 
@@ -45,32 +48,30 @@ class SqlProcessor(Processor):
     when = 'sql'
 
     def transform(self, item):
-        return sql_format(item['sql'])
+        return sa.text(item['sql']), True
 
 
 class SelectProcessor(Processor):
     when = 'select'
-    tmpl = """
-    select {fields} from {from_}
-    {where}
-    {group_by}
-    {order_by}
-    {limit}
-    """
 
     def transform(self, item):
         select = item['select']
-        ctx = dict(
-            fields=','.join(select['fields']),
-            from_=select['from'],
-            where=_build_where(select),
-            group_by=_build_clause('group by', select),
-            order_by=_build_clause('order by', select),
-            limit=_build_clause('limit', select))
-        sql = self.tmpl.format(**ctx).strip()
-        return merge(
-            omit(item, ['select']),
-            {'sql': sql})
+        fields = select.get('fields', ['*'])
+        qry = sa.select(_build_fields(fields))
+        qry = qry.select_from(text(select['from']))
+        if 'where' in select:
+            qry = qry.where(_build_where(select['where']))
+
+        if 'group_by' in select:
+            qry = qry.group_by(*[text(g) for g in listify(select['group_by'])])
+
+        if 'order_by' in select:
+            qry = qry.order_by(*[text(o) for o in listify(select['order_by'])])
+
+        if 'limit' in select:
+            qry = qry.limit(select['limit'])
+
+        return qry, True
 
 class SQLRender(object):
     MAX_ITERATION = 100
@@ -83,17 +84,14 @@ class SQLRender(object):
         self.processors = [cls() for cls in processors]
 
     def render(self):
-        return self._render(self.data)
+        return self._render(copy.deepcopy(self.data))
 
     def _render(self, item):
         for i in range(self.MAX_ITERATION):
             for p in self.processors:
-                if isinstance(item, str):
+                item, completed = p.process(item)
+                if completed:
                     return item
-                if isinstance(item, CommentedMap):
-                    item = dict(item)
-                item = p.process(item)
-
         raise Exception(
             "Cannot parse the item within {} iterations:\n{}".format(
                 self.MAX_ITERATION, item))

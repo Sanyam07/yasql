@@ -2,10 +2,34 @@ tasks:
   - name: simple
     doc: >
       Expected output:
+        select
+           col1, col2, count(*) as cnt
+        from table1
+        where col1 = 'foo' and col2 = 1
+        group by col1
+        order by col2 desc
+    select:
+      fields:
+        - col1
+        - col2
+        - cnt: count(*)
+      from: table1
+      where:
+        col1: foo
+        col2: 1
+      group_by: col1
+      order_by: col2 desc
+
+  - name: alias
+    doc: >
+      Expected output:
         select col1, col2 from table1 where col1 = 'foo' and col2 = 1
     select:
       fields: [col1, col2]
-      from: table1
+      from:
+        t1: table1
+      join:
+        t2: table2 on (table1.id = table2.id)
       where:
         col1: foo
         col2: 1

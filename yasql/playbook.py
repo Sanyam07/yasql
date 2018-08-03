@@ -1,6 +1,8 @@
 from collections import Counter
 from .yaml_parser import YAMLParser
 from .sql_render import SQLRender
+from .utils import sql_format
+
 
 class DuplicateTaskNames(Exception):
     pass
@@ -12,8 +14,11 @@ class Task(object):
     def __init__(self, data):
         self.data = data
 
-    def render_sql(self):
-        return SQLRender(self.data).render()
+    def render_sql(self, engine):
+        query = SQLRender(self.data).render()
+        query = str(query.compile(engine,
+                                  compile_kwargs={"literal_binds": True}))
+        return sql_format(query)
 
     @property
     def doc(self):
