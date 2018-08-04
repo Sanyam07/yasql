@@ -1,9 +1,10 @@
+import re
 import copy
 
 import sqlalchemy as sa
 from sqlalchemy import text
 
-from .utils import listify, dict_one
+from .utils import listify, dict_one, text_from
 
 def _build_where(conds):
     def _build_one(cond):
@@ -25,6 +26,28 @@ def _build_fields(fields):
             return sa.literal_column(sql).label(col_name)
 
     return [_build_one(f) for f in listify(fields)]
+
+def _build_from(from_, join=None):
+    if isinstance(from_, str):
+        return text_from(from_)
+    elif isinstance(from_, dict):
+        alias, from_ = dict_one(from_)
+        return text_from(from_).alias(alias)
+
+def _build_join(tables):
+    def _parse_join(sql):
+        table, _, join = re.split(r'\s+(on|ON)\s+', sql)
+        return (text_from(table), text(join))
+
+    def _build_one(table):
+        if isinstance(table, str):
+            return _parse_join(table)
+        elif isinstance(table, dict):
+            alias, table = dict_one(table)
+            table, join_on = _parse_join(table)
+            return (table.alias(alias), join_on)
+
+    return [_build_one(t) for t in listify(tables)]
 
 
 class Processor(object):
@@ -58,7 +81,14 @@ class SelectProcessor(Processor):
         select = item['select']
         fields = select.get('fields', ['*'])
         qry = sa.select(_build_fields(fields))
-        qry = qry.select_from(text(select['from']))
+
+        table = _build_from(select['from'])
+        if 'join' in select:
+            joins = _build_join(select['join'])
+            for join in joins:
+                table = table.join(*join)
+        qry = qry.select_from(table)
+
         if 'where' in select:
             qry = qry.where(_build_where(select['where']))
 
@@ -72,6 +102,7 @@ class SelectProcessor(Processor):
             qry = qry.limit(select['limit'])
 
         return qry, True
+
 
 class SQLRender(object):
     MAX_ITERATION = 100

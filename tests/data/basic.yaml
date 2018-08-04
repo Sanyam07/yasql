@@ -20,16 +20,21 @@ tasks:
       group_by: col1
       order_by: col2 desc
 
-  - name: alias
+  - name: join_and_alias
     doc: >
       Expected output:
-        select col1, col2 from table1 where col1 = 'foo' and col2 = 1
+        select
+            t1.user_id as user_id,
+            t1.order_id as order_id
+        from table1 as t1
+        join table2 as t2 on (t1.user_id = t2.id)
+        join table3 as t3 on (t1.order_id = t3.id)
     select:
-      fields: [col1, col2]
+      fields:
+        user_id: t1.user_id
+        order_id: t1.order_id
       from:
         t1: table1
       join:
-        t2: table2 on (table1.id = table2.id)
-      where:
-        col1: foo
-        col2: 1
+        t2: table2 on (t1.user_id = t2.id)
+        t3: table3 on (t1.order_id = t3.id)

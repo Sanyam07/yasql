@@ -35,3 +35,6 @@ def engine():
 
 def test_simple(engine, basic_playbook):
     check_task(engine, basic_playbook, 'simple')
+
+def test_join_and_alias(engine, basic_playbook):
+    check_task(engine, basic_playbook, 'join_and_alias')

@@ -1,11 +1,22 @@
 from collections import OrderedDict
+
 import sqlparse
+from sqlalchemy import text, table
+from sqlalchemy.sql.expression import TextAsFrom
 
 def sql_format(sql):
     sql = sql.strip()
     if not sql.endswith(';'):
         sql = sql + ';'
     return sqlparse.format(sql.strip(), reindent=True, keyword_case='upper')
+
+def text_from(sql):
+    # If sql is a single word, it should be a table
+    # Otherwise, it should be a sql
+    if ' ' in sql:
+        return TextAsFrom(text(sql), [])
+    else:
+        return table(sql)
 
 def listify(item):
     if isinstance(item, list):
