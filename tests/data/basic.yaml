@@ -1,6 +1,21 @@
-tasks:
-  - name: simple
-    doc: >
+vars:
+  v_table: table1
+  v_filter:
+    col1: 1
+    col2: 2
+
+templates:
+  template1:
+    select:
+      fields:
+        - col1
+        - ${agg_field}
+      from: table1
+      group_by: col1
+
+queries:
+  - name: test_simple
+    doc: |
       Expected output:
         select
            col1, col2, count(*) as cnt
@@ -20,8 +35,8 @@ tasks:
       group_by: col1
       order_by: col2 desc
 
-  - name: join_and_alias
-    doc: >
+  - name: test_join
+    doc: |
       Expected output:
         select
             t1.user_id as user_id,
@@ -38,3 +53,21 @@ tasks:
       join:
         t2: table2 on (t1.user_id = t2.id)
         t3: table3 on (t1.order_id = t3.id)
+
+  - name: test_vars
+    doc: |
+      Expected output:
+        select * from table2 where col1 = 1 and col2 = 2
+    vars:
+      v_table: table2
+    select:
+      from: ${v_table}
+      where: ${v_filter}
+
+  - name: test_template
+    doc: |
+      Expected output:
+        select col1, count(*) from table1 group by col1
+    template: template1
+    vars:
+      agg_field: count(*)

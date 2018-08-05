@@ -1,5 +1,4 @@
 import re
-import copy
 
 import sqlalchemy as sa
 from sqlalchemy import text
@@ -66,7 +65,6 @@ class Processor(object):
             return isinstance(item, dict) and self.when in item
         return True
 
-
 class SqlProcessor(Processor):
     when = 'sql'
 
@@ -115,7 +113,7 @@ class SQLRender(object):
         self.processors = [cls() for cls in processors]
 
     def render(self):
-        return self._render(copy.deepcopy(self.data))
+        return self._render(self.data)
 
     def _render(self, item):
         for i in range(self.MAX_ITERATION):

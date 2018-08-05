@@ -18,23 +18,26 @@ def data_path(fname):
 def assert_sql_equal(sql1, sql2):
     assert sql_format(sql1) == sql_format(sql2)
 
-def check_task(engine, playbook, task_name):
-    task = playbook.get_task(task_name)
-    ground_truth = task.doc.replace('Expected output:', '').strip()
-    assert task.render_sql(engine) == sql_format(ground_truth), \
-        "Wrong SQL output: {}".format(task_name)
-
-@pytest.fixture
-def basic_playbook():
-    with open(data_path('basic.yaml')) as f:
-        return Playbook(f.read())
+def _test_query(engine, playbook_path, query_name):
+    with open(data_path(playbook_path)) as f:
+        playbook = Playbook(f.read())
+    query = playbook.get_query(query_name)
+    ground_truth = query.doc.replace('Expected output:', '').strip()
+    assert query.render_sql(engine) == sql_format(ground_truth), \
+        "Wrong SQL output: {}".format(query_name)
 
 @pytest.fixture
 def engine():
     return create_engine('sqlite://')
 
-def test_simple(engine, basic_playbook):
-    check_task(engine, basic_playbook, 'simple')
+def test_simple(engine):
+    _test_query(engine, 'basic.yaml', 'test_simple')
 
-def test_join_and_alias(engine, basic_playbook):
-    check_task(engine, basic_playbook, 'join_and_alias')
+def test_join(engine):
+    _test_query(engine, 'basic.yaml', 'test_join')
+
+def test_vars(engine):
+    _test_query(engine, 'basic.yaml', 'test_vars')
+
+def test_template(engine):
+    _test_query(engine, 'basic.yaml', 'test_template')
