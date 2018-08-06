@@ -19,8 +19,7 @@ def assert_sql_equal(sql1, sql2):
     assert sql_format(sql1) == sql_format(sql2)
 
 def _test_query(engine, playbook_path, query_name):
-    with open(data_path(playbook_path)) as f:
-        playbook = Playbook(f.read())
+    playbook = Playbook.load_from_path(data_path(playbook_path))
     query = playbook.get_query(query_name)
     ground_truth = query.doc.replace('Expected output:', '').strip()
     assert query.render_sql(engine) == sql_format(ground_truth), \
@@ -41,3 +40,9 @@ def test_vars(engine):
 
 def test_template(engine):
     _test_query(engine, 'basic.yaml', 'test_template')
+
+def test_import_vars(engine):
+    _test_query(engine, 'import.yaml', 'test_import_vars')
+
+def test_import_templates(engine):
+    _test_query(engine, 'import.yaml', 'test_import_templates')

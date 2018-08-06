@@ -1,0 +1,8 @@
+templates:
+  tmpl:
+    select:
+      fields:
+        - col1
+        - ${agg_field}
+      from: table1
+      group_by: col1

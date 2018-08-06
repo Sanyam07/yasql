@@ -1,11 +1,13 @@
+import os
 import copy
 from collections import Counter
 
 from funcy import cached_property, merge
 
+from .base import dict_cls, KeyPathError
 from .yaml_parser import load
 from .sql_render import SQLRender
-from .utils import sql_format, merge_vars, inject_vars
+from .utils import sql_format, overrides, inject_vars, listify
 
 
 class DuplicateQueryNames(Exception):
@@ -15,30 +17,32 @@ class QueryNotExists(Exception):
     pass
 
 
-def plugin_vars(query, data):
+def query_vars(query, data):
     playbook_vars = query.playbook.get('vars', {})
     query_vars = data.get('vars', {})
-    vars = merge_vars(playbook_vars, query_vars)
+    vars = overrides(playbook_vars, query_vars)
     if vars:
         data = inject_vars(data, vars)
     return data
 
 
-def plugin_template(query, data):
+def query_template(query, data):
     if 'template' not in data:
         return data
 
     templates = query.playbook.get('templates', {})
-    tmpl_name = data.pop('template')
-    if tmpl_name not in templates:
-        raise Exception('Template not found: {}'.format(tmpl_name))
-    return merge(data, templates[tmpl_name])
+    tmpl_path = data.pop('template')
+    try:
+        tmpl = templates.get_path(tmpl_path)
+    except KeyPathError:
+        raise Exception('Template not found: {}'.format(tmpl_path))
+    return merge(data, tmpl)
 
 
 class Query(object):
-    plugins = [
-        plugin_template,
-        plugin_vars
+    keywords = [
+        query_template,
+        query_vars
     ]
 
     def __init__(self, data, playbook):
@@ -46,14 +50,14 @@ class Query(object):
         self.playbook = playbook
         self.data = data
 
-    def apply_plugins(self, data):
-        for plugin in self.plugins:
-            data = plugin(self, data)
+    def process_keywords(self, data):
+        for kw in self.keywords:
+            data = kw(self, data)
         return data
 
     def render_sql(self, engine):
         data = copy.deepcopy(self.data)
-        data = self.apply_plugins(data)
+        data = self.process_keywords(data)
         query = SQLRender(data).render()
         query = str(query.compile(engine,
                                   compile_kwargs={"literal_binds": True}))
@@ -64,8 +68,34 @@ class Query(object):
         return self.data.get('doc')
 
 class Playbook(object):
-    def __init__(self, content):
-        self.data = load(content)
+    def __init__(self, content, path=None):
+        data = load(content)
+        self.path = path
+        self.data = self.process_imports(data)
+
+    @classmethod
+    def load_from_path(cls, path):
+        with open(path) as f:
+            return Playbook(f.read(), path)
+
+    def process_imports(self, data):
+        imports = data.get('imports', [])
+        base_dir = os.path.dirname(self.path)
+        for imp in imports:
+            playbook = self.load_from_path(os.path.join(base_dir, imp['from']))
+            namespace = imp.get('as')
+            keys = listify(imp['import'])
+            for key in keys:
+                imported = playbook.get(key)
+                if not imported:
+                    raise Exception("{} doesn't exist in {}".format(
+                        key, imp['from']))
+                data.setdefault(key, dict_cls())
+                if namespace:
+                    data[key].setdefault(namespace, dict_cls()).update(imported)
+                else:
+                    data[key] = overrides(imported, data[key])
+        return data
 
     def get(self, key, default=None):
         return self.data.get(key, default)
@@ -76,9 +106,6 @@ class Playbook(object):
             return queries[0]
         else:
             raise QueryNotExists(query_name)
-
-    def render_sql(self, query_name):
-        return self.get_query(query_name).render_sql(self.vars)
 
     @cached_property
     def queries(self):

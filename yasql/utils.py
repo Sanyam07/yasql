@@ -1,11 +1,12 @@
 import re
-from collections import OrderedDict
 
 import sqlparse
 from funcy import print_calls
 from mako.template import Template
 from sqlalchemy import text, table
 from sqlalchemy.sql.expression import TextAsFrom
+
+from .base import dict_cls
 
 def sql_format(sql):
     sql = sql.strip()
@@ -28,7 +29,7 @@ def listify(item):
         return item
     elif isinstance(item, str):
         return [item]
-    elif isinstance(item, OrderedDict):
+    elif isinstance(item, dict_cls):
         return [{k: v} for k, v in item.items()]
     raise Exception("Cannot listfy object: {}".format(item))
 
@@ -38,7 +39,7 @@ def dict_one(item):
     return item.copy().popitem()
 
 
-def merge_vars(*layers, dict_cls=OrderedDict):
+def overrides(*layers):
     def _merge_dict(d1, d2):
         result = d1.copy()
         for k, v in d2.items():
@@ -71,7 +72,7 @@ def merge_vars(*layers, dict_cls=OrderedDict):
 
     if len(layers) == 2:
         return _merge_two(*layers)
-    return merge_vars(_merge_two(*layers[:2]), *layers[2:], dict_cls=dict_cls)
+    return overrides(_merge_two(*layers[:2]), *layers[2:], dict_cls=dict_cls)
 
 
 def inject_vars(item, vars):
@@ -87,10 +88,7 @@ def inject_vars(item, vars):
         return _expand(item)
     elif isinstance(item, list):
         return [inject_vars(i, vars) for i in item]
-    elif isinstance(item, OrderedDict):
-        return OrderedDict(
+    elif isinstance(item, dict_cls):
+        return dict_cls(
             [(k, inject_vars(v, vars)) for k, v in item.items()])
     return item
-
-if __name__ == '__main__':
-    print(inject_vars(OrderedDict({'fields': ['col1', '${agg_field}']}), {'agg_field': 'count(*)'}))

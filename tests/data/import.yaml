@@ -1,0 +1,34 @@
+imports:
+  - from: base_vars.yaml
+    import: vars
+  - from: base_vars.yaml
+    import: vars
+    as: bv
+  - from: base_templates.yaml
+    import: templates
+    as: bt
+
+vars:
+  col: bar
+
+queries:
+  # `table` is defined in base_vars.yaml
+  # `col` is defined in base_vars.yaml but get overrided in current playbook
+  # `base.col` is defined in base_vars.yaml
+  - name: test_import_vars
+    doc: |
+      Expected output:
+        select * from example where col1 = 'hello foo' and col2 = 'bar'
+    select:
+      from: ${table}
+      where:
+        col1: hello ${bv.col}
+        col2: ${col}
+
+  - name: test_import_templates
+    doc: |
+      Expected output:
+        select col1, count(*) from table1 group by col1
+    template: bt.tmpl
+    vars:
+      agg_field: count(*)
