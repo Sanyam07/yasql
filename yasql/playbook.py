@@ -1,13 +1,14 @@
 import os
+import re
 import copy
 from collections import Counter
 
 from funcy import cached_property, merge
 
-from .base import dict_cls, KeyPathError
+from .base import dict_cls
 from .yaml_parser import load
 from .sql_render import SQLRender
-from .utils import sql_format, overrides, inject_vars, listify
+from .utils import sql_format, overrides, inject_vars, listify, dict_one
 
 
 class DuplicateQueryNames(Exception):
@@ -15,6 +16,32 @@ class DuplicateQueryNames(Exception):
 
 class QueryNotExists(Exception):
     pass
+
+
+def query_select_with(query, data):
+    def _process_one(item):
+        if isinstance(item, str):
+            alias = item
+            sql = playbook.get_query(item).render_sql(engine)
+            return dict_cls({item: sql})
+        elif isinstance(item, dict_cls):
+            alias, subquery = dict_one(item)
+            sql = playbook.get_query(subquery).render_sql(engine)
+        else:
+            raise Exception("Invalid format in with: {}".format(item))
+        return dict_cls({alias: re.sub(';$', '', sql)})
+
+    playbook = query.playbook
+    engine = query.engine
+    select_with = data.get_path('select.with')
+    if not select_with:
+        return data
+
+    select_with = listify(select_with)
+    select_with = [_process_one(item) for item in select_with]
+    data['select']['with'] = select_with
+
+    return data
 
 
 def query_vars(query, data):
@@ -32,9 +59,8 @@ def query_template(query, data):
 
     templates = query.playbook.get('templates', {})
     tmpl_path = data.pop('template')
-    try:
-        tmpl = templates.get_path(tmpl_path)
-    except KeyPathError:
+    tmpl = templates.get_path(tmpl_path)
+    if not tmpl:
         raise Exception('Template not found: {}'.format(tmpl_path))
     return merge(data, tmpl)
 
@@ -42,6 +68,7 @@ def query_template(query, data):
 class Query(object):
     keywords = [
         query_template,
+        query_select_with,
         query_vars
     ]
 
@@ -49,6 +76,7 @@ class Query(object):
         self.name = data.get('name')
         self.playbook = playbook
         self.data = data
+        self.engine = None
 
     def process_keywords(self, data):
         for kw in self.keywords:
@@ -56,6 +84,7 @@ class Query(object):
         return data
 
     def render_sql(self, engine):
+        self.engine = engine
         data = copy.deepcopy(self.data)
         data = self.process_keywords(data)
         query = SQLRender(data).render()

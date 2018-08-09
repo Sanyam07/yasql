@@ -3,8 +3,6 @@ import re
 import sqlparse
 from funcy import print_calls
 from mako.template import Template
-from sqlalchemy import text, table
-from sqlalchemy.sql.expression import TextAsFrom
 
 from .base import dict_cls
 
@@ -15,22 +13,13 @@ def sql_format(sql):
     return sqlparse.format(sql.strip(), reindent=True, keyword_case='upper')
 
 
-def text_from(sql):
-    # If sql is a single word, it should be a table
-    # Otherwise, it should be a sql
-    if ' ' in sql:
-        return TextAsFrom(text(sql), [])
-    else:
-        return table(sql)
-
-
 def listify(item):
     if isinstance(item, list):
         return item
     elif isinstance(item, str):
         return [item]
     elif isinstance(item, dict_cls):
-        return [{k: v} for k, v in item.items()]
+        return [dict_cls({k: v}) for k, v in item.items()]
     raise Exception("Cannot listfy object: {}".format(item))
 
 

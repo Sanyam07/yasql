@@ -71,3 +71,20 @@ queries:
     template: template1
     vars:
       agg_field: count(*)
+
+  - name: test_with
+    doc: |
+      Expected output:
+        with
+          w1 as (select col1, count(*) from table1 group by col1),
+          w2 as (select * from table2 where col1 = 1 and col2 = 2)
+        select w1.col1, w2.col2
+        from w1
+        join w2 on (w1.col1 = w2.col1)
+    select:
+      with:
+        w1: test_template
+        w2: test_vars
+      fields: [w1.col1, w2.col2]
+      from: w1
+      join: w2 on (w1.col1 = w2.col1)

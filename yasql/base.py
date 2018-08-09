@@ -1,8 +1,5 @@
 from collections import OrderedDict
 
-class KeyPathError(Exception):
-    pass
-
 class DotOrderedDict(OrderedDict):
     def __getattr__(self, attr):
         try:
@@ -10,7 +7,7 @@ class DotOrderedDict(OrderedDict):
         except KeyError:
             raise AttributeError(attr)
 
-    def get_path(self, path):
+    def get_path(self, path, default=None):
         parts = path.split('.')
         result = self
         try:
@@ -18,6 +15,6 @@ class DotOrderedDict(OrderedDict):
                 result = result[p]
             return result
         except KeyError:
-            raise KeyPathError(path)
+            return default
 
 dict_cls = DotOrderedDict

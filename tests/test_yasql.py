@@ -41,6 +41,9 @@ def test_vars(engine):
 def test_template(engine):
     _test_query(engine, 'basic.yaml', 'test_template')
 
+def test_with(engine):
+    _test_query(engine, 'basic.yaml', 'test_with')
+
 def test_import_vars(engine):
     _test_query(engine, 'import.yaml', 'test_import_vars')
 
