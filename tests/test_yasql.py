@@ -22,12 +22,15 @@ def _test_query(engine, playbook_path, query_name):
     playbook = Playbook.load_from_path(data_path(playbook_path))
     query = playbook.get_query(query_name)
     ground_truth = query.doc.replace('Expected output:', '').strip()
+    print(query.render_sql(engine))
     assert query.render_sql(engine) == sql_format(ground_truth), \
         "Wrong SQL output: {}".format(query_name)
 
 @pytest.fixture
 def engine():
     return create_engine('sqlite://')
+
+### Basic
 
 def test_simple(engine):
     _test_query(engine, 'basic.yaml', 'test_simple')
@@ -44,8 +47,20 @@ def test_template(engine):
 def test_with(engine):
     _test_query(engine, 'basic.yaml', 'test_with')
 
+### Import
+
 def test_import_vars(engine):
     _test_query(engine, 'import.yaml', 'test_import_vars')
 
 def test_import_templates(engine):
     _test_query(engine, 'import.yaml', 'test_import_templates')
+
+### Where clause
+def test_where_in(engine):
+    _test_query(engine, 'where_clause.yaml', 'test_in')
+
+def test_where_expr(engine):
+    _test_query(engine, 'where_clause.yaml', 'test_sql_expr')
+
+def test_where_or(engine):
+    _test_query(engine, 'where_clause.yaml', 'test_or')
