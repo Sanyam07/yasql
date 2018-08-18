@@ -15,12 +15,14 @@ requirements = [
     'Click>=6.0',
     'sqlparse',
     'funcy',
-    'ruamel',
+    'PyYAML',
+    'dateparser',
+    'lark-parser'
 ]
 
 setup_requirements = ['pytest-runner', ]
 
-test_requirements = ['pytest', ]
+test_requirements = ['pytest', 'freezegun' ]
 
 setup(
     author="Jianye Ye",

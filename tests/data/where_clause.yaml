@@ -1,3 +1,6 @@
+config:
+  timezone: UTC
+
 queries:
   - name: test_in
     doc: |
@@ -29,3 +32,62 @@ queries:
         or_:
           col2: bar
           col3: 1
+
+  - name: test_abs_date
+    doc: |
+      Expected output:
+        select * from table1
+        where
+        col1 >= '2018-01-01 00:00:00' and col1 < '2019-01-01 00:00:00' and
+        col2 >= '2018-05-01 00:00:00' and col2 < '2018-06-01 00:00:00' and
+        col3 >= '2018-05-17 00:00:00' and col3 < '2018-05-18 00:00:00' and
+        col4 >= '2018-01-01 00:00:00' and
+        col5 >= '2018-01-01 00:00:00' and col5 < '2018-05-01 00:00:00'
+    select:
+      from: table1
+      where:
+        col1: datetime | 2018
+        col2: datetime | 2018-05
+        col3: datetime | 2018-05-17
+        col4: datetime | since 2018-01-01
+        col5: datetime | since 2018-01-01 until 2018-05-01
+
+  # mock time: 2018-08-15 10:00AM
+  # Week start on Monday
+  - name: test_rel_date1
+    doc: |
+      Expected output:
+        select * from table1
+        where
+        col1 >= '2018-01-01 00:00:00' and col1 < '2019-01-01 00:00:00' and
+        col2 >= '2018-08-01 00:00:00' and col2 < '2018-09-01 00:00:00' and
+        col3 >= '2018-08-13 00:00:00' and col3 < '2018-08-20 00:00:00' and
+        col4 >= '2018-08-15 00:00:00' and col4 < '2018-08-16 00:00:00' and
+        col5 >= '2017-01-01 00:00:00' and col5 < '2018-01-01 00:00:00' and
+        col6 >= '2018-07-01 00:00:00' and col6 < '2018-08-01 00:00:00' and
+        col7 >= '2018-08-06 00:00:00' and col7 < '2018-08-13 00:00:00' and
+        col8 >= '2018-08-14 00:00:00' and col8 < '2018-08-15 00:00:00'
+    select:
+      from: table1
+      where:
+        col1: dt | this year
+        col2: dt | this month
+        col3: dt | this week
+        col4: dt | today
+        col5: dt | last year
+        col6: dt | last month
+        col7: dt | last week
+        col8: dt | yesterday
+
+  - name: test_rel_date2
+    doc: |
+      Expected output:
+        select * from table1
+        where
+        col1 >= '2018-08-08 10:00:00' and col1 < '2018-08-15 10:00:00' and
+        col2 >= 1533081600 and col2 < 1535760000
+    select:
+      from: table1
+      where:
+        col1: dt | in last 7 days
+        col2: ts | this month

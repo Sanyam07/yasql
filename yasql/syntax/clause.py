@@ -6,6 +6,7 @@ from sqlalchemy.sql.expression import TextAsFrom
 from funcy import decorator
 
 from yasql.utils import dict_one, listify
+from .datetime import parse_dt_expr, is_dt_expr
 
 @decorator
 def clause(call, key):
@@ -83,6 +84,18 @@ def where(query, data):
         col = sa.literal_column(col)
         if isinstance(val, list):
             return col.in_(val)
+        elif isinstance(val, str) and is_dt_expr(val):
+            dt = parse_dt_expr(val)
+            if not isinstance(dt, tuple):
+                return (col == dt)
+            start, end = dt
+            if start and end:
+                return (col >= start) & (col < end)
+            elif start:
+                return (col >= start)
+            elif end:
+                return (col < end)
+
         return (col == val)
 
     conds = sa.and_(*[_build_one(c) for c in listify(data)])

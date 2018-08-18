@@ -6,6 +6,7 @@ from collections import Counter
 from funcy import cached_property, merge
 
 from .base import dict_cls
+from .config import cfg
 from .yaml_parser import load
 from .sql_render import SQLRender
 from .utils import sql_format, overrides, inject_vars, listify, dict_one
@@ -101,11 +102,15 @@ class Playbook(object):
         data = load(content)
         self.path = path
         self.data = self.process_imports(data)
+        self.update_config()
 
     @classmethod
     def load_from_path(cls, path):
         with open(path) as f:
             return Playbook(f.read(), path)
+
+    def update_config(self):
+        cfg.update(self.data.get('config', {}))
 
     def process_imports(self, data):
         imports = data.get('imports', [])
