@@ -3,10 +3,10 @@ import re
 import copy
 from collections import Counter
 
-from funcy import cached_property, merge
+from funcy import cached_property, merge, omit
 
 from .base import dict_cls
-from .config import cfg
+from .config import Config
 from .yaml_parser import load
 from .sql_render import SQLRender
 from .utils import sql_format, overrides, inject_vars, listify, dict_one
@@ -23,17 +23,16 @@ def query_select_with(query, data):
     def _process_one(item):
         if isinstance(item, str):
             alias = item
-            sql = playbook.get_query(item).render_sql(engine)
+            sql = playbook.get_query(item).render_sql()
             return dict_cls({item: sql})
         elif isinstance(item, dict_cls):
             alias, subquery = dict_one(item)
-            sql = playbook.get_query(subquery).render_sql(engine)
+            sql = playbook.get_query(subquery).render_sql()
         else:
             raise Exception("Invalid format in with: {}".format(item))
         return dict_cls({alias: re.sub(';$', '', sql)})
 
     playbook = query.playbook
-    engine = query.engine
     select_with = data.get_path('select.with')
     if not select_with:
         return data
@@ -65,6 +64,11 @@ def query_template(query, data):
         raise Exception('Template not found: {}'.format(tmpl_path))
     return merge(data, tmpl)
 
+def output_table(query, name):
+    sql = query.render_sql()
+    conn = query.db_conn
+    sql = 'CREATE TABLE {} AS \n{}'.format(name, query.render_sql())
+    return conn.execute(sql)
 
 class Query(object):
     keywords = [
@@ -73,44 +77,56 @@ class Query(object):
         query_vars
     ]
 
+    output_formats = {
+        'table': output_table
+        }
+
     def __init__(self, data, playbook):
         self.name = data.get('name')
         self.playbook = playbook
         self.data = data
-        self.engine = None
 
     def process_keywords(self, data):
         for kw in self.keywords:
             data = kw(self, data)
         return data
 
-    def render_sql(self, engine):
-        self.engine = engine
+    def render_sql(self):
         data = copy.deepcopy(self.data)
         data = self.process_keywords(data)
         query = SQLRender(data).render()
-        query = str(query.compile(engine,
+        query = str(query.compile(self.db_conn,
                                   compile_kwargs={"literal_binds": True}))
         return sql_format(query)
+
+    def output(self):
+        out = self.data.get('output')
+        if isinstance(out, str):
+            out = {'format': 'table', 'name': out}
+        format = out.get('format')
+        kwargs = omit(out, 'format')
+        if format not in self.output_formats:
+            raise Exception('Output not supported: {}'.format(format))
+        return self.output_formats.get(format)(self, **kwargs)
 
     @property
     def doc(self):
         return self.data.get('doc')
+
+    @property
+    def db_conn(self):
+        return self.playbook.config.db_conn
 
 class Playbook(object):
     def __init__(self, content, path=None):
         data = load(content)
         self.path = path
         self.data = self.process_imports(data)
-        self.update_config()
 
     @classmethod
     def load_from_path(cls, path):
         with open(path) as f:
             return Playbook(f.read(), path)
-
-    def update_config(self):
-        cfg.update(self.data.get('config', {}))
 
     def process_imports(self, data):
         imports = data.get('imports', [])
@@ -151,3 +167,9 @@ class Playbook(object):
         if dups:
             raise DuplicateQueryNames(dups)
         return queries
+
+    @cached_property
+    def config(self):
+        cfg = Config()
+        cfg.update(self.data.get('config', {}))
+        return cfg

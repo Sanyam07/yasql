@@ -8,7 +8,7 @@ from freezegun import freeze_time
 from dateutil.relativedelta import relativedelta
 from lark import Lark, Transformer
 
-from yasql.config import cfg
+from yasql.context import ctx
 
 grammar = """
 ?start: "datetime |" expr                     -> dt_expr
@@ -74,7 +74,7 @@ def convert_dt(item, converter, *args):
 class DateTransformer(Transformer):
     def __init__(self):
         super().__init__()
-        self.tz = cfg.timezone
+        self.tz = ctx.config.timezone
 
     def dt_expr(self, items):
         return convert_dt(items[0], dt_to_str)

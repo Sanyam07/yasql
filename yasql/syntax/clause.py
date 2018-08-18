@@ -2,7 +2,8 @@ import re
 
 import sqlalchemy as sa
 from sqlalchemy import text
-from sqlalchemy.sql.expression import TextAsFrom
+from sqlalchemy.sql.expression import TextAsFrom, Executable, ClauseElement
+
 from funcy import decorator
 
 from yasql.utils import dict_one, listify
@@ -60,7 +61,7 @@ class FromClause(object):
     def _build_join(self, tables):
         def _parse_join(sql):
             table, _, join = re.split(r'\s+(on|ON)\s+', sql)
-            return (self.parse_from(table), text(join))
+            return (self._parse_from(table), text(join))
 
         def _build_one(table):
             if isinstance(table, str):
