@@ -114,3 +114,7 @@ def order_by(query, data):
 @clause(key='limit')
 def limit(query, data):
     return query.limit(data)
+
+@clause(key='having')
+def having(query, data):
+    return query.having(text(data))

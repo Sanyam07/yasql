@@ -13,11 +13,14 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'Click>=6.0',
+    'sqlalchemy',
     'sqlparse',
     'funcy',
     'PyYAML',
     'dateparser',
-    'lark-parser'
+    'lark-parser',
+    'Mako',
+    'tabulate'
 ]
 
 setup_requirements = ['pytest-runner', ]

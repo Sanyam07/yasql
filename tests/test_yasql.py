@@ -25,7 +25,7 @@ def assert_sql_equal(sql1, sql2):
 def _test_query(playbook_path, query_name):
     playbook = Playbook.load_from_path(data_path(playbook_path))
     query = playbook.get_query(query_name)
-    ctx.set_playbook(playbook)
+    ctx.playbook = playbook
     ground_truth = query.doc.replace('Expected output:', '').strip()
     print(query.render_sql())
     assert query.render_sql() == sql_format(ground_truth), \

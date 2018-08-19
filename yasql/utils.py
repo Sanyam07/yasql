@@ -1,10 +1,15 @@
 import re
+import logging
+from textwrap import indent
 
 import sqlparse
 from funcy import print_calls
 from mako.template import Template
 
 from .base import dict_cls
+from .context import ctx
+
+logger = logging.getLogger(__name__)
 
 def sql_format(sql):
     sql = sql.strip()
@@ -81,3 +86,9 @@ def inject_vars(item, vars):
         return dict_cls(
             [(k, inject_vars(v, vars)) for k, v in item.items()])
     return item
+
+def execute_sql(conn, sql):
+    if ctx.dry:
+        logger.info('Execute SQL query:\n%s', indent(sql, '    '))
+    else:
+        return conn.execute(sql)

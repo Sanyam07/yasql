@@ -3,7 +3,7 @@ from sqlalchemy import text, table
 from sqlalchemy.sql.expression import TextAsFrom
 
 from .utils import listify, dict_one
-from .syntax.clause import from_clause, where, group_by, order_by, limit
+from .syntax.clause import from_clause, where, group_by, order_by, having, limit
 
 
 class Processor(object):
@@ -53,7 +53,7 @@ class SelectProcessor(Processor):
         qry = sa.select(self._build_fields(fields))
         qry = self.build_query(
             qry, select,
-            clauses=[from_clause, where, group_by, order_by, limit])
+            clauses=[from_clause, where, group_by, order_by, having, limit])
 
         return qry, True
 

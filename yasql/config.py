@@ -23,6 +23,10 @@ class Config(object):
         return pytz.timezone(tz) if tz else tzlocal()
 
     @property
+    def print_max_rows(self):
+        return self.data.get('print_max_rows', 2000)
+
+    @property
     def db_conn(self):
         conn = self.data.get('db_conn', 'sqlite://')
         if not conn in self.conn_cache:

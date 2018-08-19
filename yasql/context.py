@@ -1,13 +1,11 @@
 class Context(object):
-    def set_playbook(self, playbook):
-        self._playbook = playbook
-
-    @property
-    def playbook(self):
-        return self._playbook
+    def __init__(self):
+        self.playbook = None
+        self.dry = False
+        self.print_result = False
 
     @property
     def config(self):
-        return self._playbook.config
+        return self.playbook.config
 
 ctx = Context()

@@ -1,23 +1,28 @@
 import os
 import re
 import copy
+import logging
 from collections import Counter
+from textwrap import indent
 
 from funcy import cached_property, merge, omit
+from tabulate import tabulate
 
 from .base import dict_cls
 from .config import Config
 from .yaml_parser import load
 from .sql_render import SQLRender
-from .utils import sql_format, overrides, inject_vars, listify, dict_one
+from .context import ctx
+from .utils import sql_format, overrides, inject_vars, listify, dict_one, \
+    execute_sql
 
+logger = logging.getLogger(__name__)
 
 class DuplicateQueryNames(Exception):
     pass
 
 class QueryNotExists(Exception):
     pass
-
 
 def query_select_with(query, data):
     def _process_one(item):
@@ -64,27 +69,56 @@ def query_template(query, data):
         raise Exception('Template not found: {}'.format(tmpl_path))
     return merge(data, tmpl)
 
+def query_output(query, data):
+    out = data.get('output', [])
+    if isinstance(out, str):
+        out = [{'format': 'table', 'name': out}]
+    elif isinstance(out, dict_cls):
+        out = [out]
+    if ctx.print_result:
+        out.insert(0, {'format': 'print'})
+    print(out)
+    return merge(data, {'output': out})
+
+
 def output_table(query, name):
     sql = query.render_sql()
-    conn = query.db_conn
     sql = 'CREATE TABLE {} AS \n{}'.format(name, query.render_sql())
-    return conn.execute(sql)
+    result = execute_sql(query.db_conn, sql)
+    logger.info('Table %s was created from query %s', name, query.name)
+    return result
+
+def output_print(query):
+    sql = query.render_sql()
+    cursor = execute_sql(query.db_conn, sql)
+    rows = cursor.fetchmany(ctx.config.print_max_rows)
+    if len(rows) > 0:
+        print(tabulate(rows, headers=rows[0].keys()))
+        if cursor.rowcount > len(rows):
+            remaining_count = cursor.rowcount - len(rows)
+            print('Other {} rows are not displayed.'.format(remaining_count))
+        print('Total rows: {}'.format(cursor.rowcount))
+    else:
+        print('0 rows')
+
 
 class Query(object):
     keywords = [
         query_template,
         query_select_with,
-        query_vars
+        query_vars,
+        query_output
     ]
 
     output_formats = {
-        'table': output_table
-        }
+        'table': output_table,
+        'print': output_print
+    }
 
     def __init__(self, data, playbook):
         self.name = data.get('name')
         self.playbook = playbook
-        self.data = data
+        self.data = self.process_keywords(data)
 
     def process_keywords(self, data):
         for kw in self.keywords:
@@ -92,22 +126,31 @@ class Query(object):
         return data
 
     def render_sql(self):
-        data = copy.deepcopy(self.data)
-        data = self.process_keywords(data)
-        query = SQLRender(data).render()
+        query = SQLRender(self.data).render()
         query = str(query.compile(self.db_conn,
                                   compile_kwargs={"literal_binds": True}))
         return sql_format(query)
 
     def output(self):
-        out = self.data.get('output')
-        if isinstance(out, str):
-            out = {'format': 'table', 'name': out}
-        format = out.get('format')
-        kwargs = omit(out, 'format')
-        if format not in self.output_formats:
-            raise Exception('Output not supported: {}'.format(format))
-        return self.output_formats.get(format)(self, **kwargs)
+        outs = self.data.get('output')
+        for out in outs:
+            format = out.get('format')
+            kwargs = omit(out, 'format')
+            if format not in self.output_formats:
+                raise Exception('Output not supported: {}'.format(format))
+            self.output_formats.get(format)(self, **kwargs)
+
+    def has_output(self):
+        return ctx.print_result or bool(self.data.get('output'))
+
+    def execute(self):
+        logger.info('Execute query %s', self.name)
+        if not self.has_output():
+            logger.info("This queries doesn't have any output, "
+                        "No commands will be executed.")
+            logger.debug('SQL:\n%s', indent(self.render_sql(), '    '))
+        else:
+            return self.output()
 
     @property
     def doc(self):
@@ -156,6 +199,14 @@ class Playbook(object):
             return queries[0]
         else:
             raise QueryNotExists(query_name)
+
+    def execute(self, queries=None):
+        logger.info('Execute playbook %s', self.path or '')
+        if not queries:
+            queries = self.queries
+        else:
+            queries = [self.get_query(q) for q in queries]
+        [q.execute() for q in queries]
 
     @cached_property
     def queries(self):
